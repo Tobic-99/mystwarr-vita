@@ -1,0 +1,12 @@
+# Game data and anything generated from it
+/rom/
+/gen/
+*.zip
+*.wav
+*.nv
+# LiveArea images: not in the repository
+/vita/sce_sys/*.png
+/vita/sce_sys/livearea/contents/*.png
+# build output
+/build/
+__pycache__/
