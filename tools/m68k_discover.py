@@ -239,6 +239,46 @@ def run():
             break
         while pending:
             walk(funcs[pending.popleft()])
+    sweep_gaps()
+
+
+def covered():
+    cov = set()
+    for f in funcs.values():
+        for a, i in f.insns.items():
+            cov.update(range(a, a + i.size, 2))
+    return cov
+
+
+def sweep_gaps():
+    """Routines nothing static points at (reached through RAM copies or computed addresses): in the program ROM's
+    uncovered stretches, every place that starts a stretch or follows a routine's end and decodes as code is an entry.
+    An extra entry into data costs code size only; a missing entry ends the game."""
+    while True:
+        cov = covered()
+        n = 0
+        a = 0x400
+        while a < 0x80000:
+            if a in cov:
+                a += 2
+                continue
+            start = a
+            while a < 0x80000 and a not in cov:
+                if (a == start or after_end(a)) and a not in funcs and code_ptr(a):
+                    add(a, 'gap')
+                    n += 1
+                a += 2
+        if not n:
+            return
+        while pending:
+            walk(funcs[pending.popleft()])
+
+
+def after_end(v):
+    """The word(s) before v end a routine: rts, rte, jmp (An), jmp abs.l, or bra."""
+    w = rd16(v - 2) or 0
+    return (w in (0x4E75, 0x4E73) or 0x4ED0 <= w <= 0x4ED7 or (w >> 8 == 0x60 and w & 0xFF not in (0, 0xFF))
+            or rd16(v - 6) == 0x4EF9 or rd16(v - 4) == 0x6000)
 
 
 def scan_tables(min_run=3):
@@ -270,7 +310,23 @@ def scan_tables(min_run=3):
                 out.update(run)
                 a = b
             else:
+                # A table can mix code and data pointers (0x1215a, per-object records), so one data pointer must
+                # not lose the rest: keep stretches of plausible code pointers where most start like routines (some
+                # routines follow data, not another routine's end).
+                good = []
+                for v in run + [None]:
+                    if v is not None and ok(v):
+                        good.append(v)
+                    else:
+                        if len(good) >= min_run and 3 * sum(map(after_end, good)) >= 2 * len(good):
+                            out.update(good)
+                        good = []
                 a += 2
+    # A lone pointer counts when it lands right after a return.
+    for a in range(0, len(ROM) - 4, 2):
+        v = ptr_at(a)
+        if v is not None and v not in out and rd16(v - 2) in (0x4E75, 0x4E73) and ok(v):
+            out.add(v)
     return sorted(out)
 
 

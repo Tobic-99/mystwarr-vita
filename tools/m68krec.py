@@ -160,6 +160,9 @@ class Gen:
             if tgt in STARTS:   # forward branch into another function's code: tail call (see prune())
                 s.tail(tgt)
                 return
+            if s.f.bad:         # undecodable: stop only if the game really gets there
+                s.emit('STORE(); m68k::fatal(c, %s, "branch to undecodable code");' % h(tgt))
+                return
             raise Unsupported('branch out of function to %06x' % tgt)
         if tgt <= pc:
             if pc in IDLE:
@@ -579,9 +582,9 @@ def main():
     ok, failed = [], []
     for f in funcs:
         try:
-            if f.bad:
+            if f.addr not in f.insns:
                 raise Unsupported('discovery hit undecodable code')
-            ok.append((f, gen_func(f, known)))
+            ok.append((f, gen_func(f, known)))   # a bad function's undecodable paths become fatal() where they are
         except Unsupported as e:
             failed.append((f, str(e)))
     # one file per 16 KB of guest address space: a newly discovered function changes only its own file, and

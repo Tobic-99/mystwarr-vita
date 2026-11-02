@@ -19,6 +19,10 @@ code about 2 ms per frame, drawing about 5 ms (split over two cores), the sound 
 `tools/m68krec.py` writes one C++ function per guest function, with 4 KB page tables for memory. The 68000 runs on its own stack and
 yields at backward branches when its slice of cycles is used.
 
+Some routines are reached only through computed addresses, so discovery also takes code pointers from mixed tables and every place in
+the program ROM's uncovered stretches that decodes as code after a routine's end. If the game still jumps to code that was not found,
+the port stops and writes the address to `ux0:data/mystwarr/log.txt`; there is no interpreter to fall back on.
+
 ## Save states
 
 That stack sits in the middle of a call chain and cannot be copied, because the game loads at a different address on each launch. So a
