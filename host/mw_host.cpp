@@ -1,3 +1,6 @@
+#ifdef __vita__
+#include <psp2/kernel/processmgr.h>
+#endif
 #include "savestate.h"
 // Host side of the recompiled 68000 code (gen/m68k/): the GX128 memory map, I/O registers, interrupts, and the
 // control-flow helpers the generated code calls (ret/dispatch/yield). Map from MAME's mystwarr driver as
@@ -232,6 +235,10 @@ void fatal(Ctx* c, uint32_t pc, const char* what) {
     std::printf("  sr %04x link %06x\n", full_sr(c), c->link);
 #ifdef MW_TRACE
     mwtrace::dump(1, 40);
+#endif
+    #ifdef __vita__
+    // std::exit tears down the C library while the other threads still run on it: the game froze instead of closing.
+    sceKernelExitProcess(1);
 #endif
     std::exit(1);
 }

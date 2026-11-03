@@ -102,7 +102,8 @@ def looks_like_code(v, n=12):
     a = v
     for k in range(n):
         w = rd16(a)
-        if w in (None, 0):
+        # 0000 00ii is a real ori.b #ii,d0; only 0000 0000 and 0000 with a non-byte immediate are fill.
+        if w is None or (w == 0 and not 0 < (rd16(a + 2) or 0) < 0x100):
             return False
         # 0x00xx with byte size = ori.b #imm: assemblers write the immediate as 0x00ii. A non-zero high byte means
         # this is the high half of a long in a table (0x0002xxxx, 0x0020xxxx), not code.
@@ -115,6 +116,24 @@ def looks_like_code(v, n=12):
             return True
         a += ins.size
     return True
+
+
+def ends_in_return(v, n=64):
+    """Linear decode from v reaches rts within n instructions, with no fill words on the way."""
+    a = v
+    for k in range(n):
+        w = rd16(a)
+        if w is None or (w == 0 and not 0 < (rd16(a + 2) or 0) < 0x100):
+            return False
+        ins = decode(a)
+        if ins is None:
+            return False
+        if ins.op == 'rts':
+            return True
+        if ins.op in ('rte', 'rtr', 'jmp', 'bra'):
+            return False
+        a += ins.size
+    return False
 
 
 def code_ptr(v):
@@ -322,10 +341,11 @@ def scan_tables(min_run=3):
                             out.update(good)
                         good = []
                 a += 2
-    # A lone pointer counts when it lands right after a return.
+    # A lone pointer counts when it lands right after a return, or when what it points at decodes cleanly to a return
+    # within a short routine (a routine right after data, reached only through a script record).
     for a in range(0, len(ROM) - 4, 2):
         v = ptr_at(a)
-        if v is not None and v not in out and rd16(v - 2) in (0x4E75, 0x4E73) and ok(v):
+        if v is not None and v not in out and ok(v) and (rd16(v - 2) in (0x4E75, 0x4E73) or ends_in_return(v)):
             out.add(v)
     return sorted(out)
 
